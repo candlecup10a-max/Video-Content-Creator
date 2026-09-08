@@ -11,8 +11,10 @@ import {
   VideoCaptionProject,
   VideoIdea,
   VideoShootSchedule,
+  VisualContentAnalysis,
 } from '../models/content.models';
-import {extractAudioFromMedia, readFileAsBase64} from '../utils/audio-extractor';
+import {extractAudioFromMedia} from '../utils/audio-extractor';
+import {extractVideoKeyframes, VideoFrameSample} from '../utils/video-frame-extractor';
 
 const STORAGE_SAVED_IDEAS = 'vcc_saved_ideas_v1';
 const STORAGE_SAVED_PACKAGES = 'vcc_saved_packages_v1';
@@ -741,47 +743,53 @@ export class ContentCreator {
     this.activeVideoFile.set(targetFile);
     this.isSeparatingCaptions.set(true);
     this.errorMessage.set(null);
-    this.captionExtractionProgress.set('Extracting audio speech track from video...');
+    this.captionExtractionProgress.set('Inspecting video audio track & extracting scene frames...');
 
     try {
-      // Extract clean 16kHz mono WAV from video container using Web Audio API
-      const extracted = await extractAudioFromMedia(targetFile);
-
-      if (extracted && extracted.audioBase64) {
-        this.captionExtractionProgress.set('Analyzing speech & syncing timestamps with Gemini AI...');
-        await this.separateCaptions({
-          audioBase64: extracted.audioBase64,
-          mimeType: extracted.mimeType,
-          durationSeconds: extracted.duration > 0 ? extracted.duration : project.durationSeconds || 45,
-        });
-      } else {
-        // Fallback: If raw file is small (<= 20MB), attempt direct base64 upload
-        if (targetFile.size <= 20 * 1024 * 1024) {
-          this.captionExtractionProgress.set('Analyzing video speech with Gemini AI...');
-          const rawB64 = await readFileAsBase64(targetFile);
-          if (rawB64) {
-            await this.separateCaptions({
-              audioBase64: rawB64,
-              mimeType: targetFile.type || 'video/mp4',
-              durationSeconds: project.durationSeconds || 45,
-            });
-            return;
-          }
-        }
-
-        this.errorMessage.set(
-          'Could not extract audio track from this video file format. You can enter or paste a script to generate synchronized captions.'
-        );
-        const noticeProject: VideoCaptionProject = {
-          ...project,
-          status: 'ready',
-          hasSpeech: false,
-          transcriptionSource: 'manual_script',
-          analysisNotice: 'No audio track could be extracted. You can enter or paste a script to generate timed captions.',
-        };
-        this.activeCaptionProject.set(noticeProject);
-        this.updateCaptionProjectInList(noticeProject);
+      // 1. Extract clean audio from video container
+      let extracted: { audioBase64?: string; mimeType?: string; duration: number; isSilent?: boolean } | null = null;
+      try {
+        extracted = await extractAudioFromMedia(targetFile);
+      } catch (audioErr) {
+        console.warn('Audio extraction warning:', audioErr);
       }
+
+      // 2. Extract visual keyframe samples across video duration
+      let videoFrames: VideoFrameSample[] = [];
+      try {
+        const visualResult = await extractVideoKeyframes(targetFile, {
+          maxFrames: 6,
+          maxDimension: 480,
+          targetDuration: extracted?.duration || project.durationSeconds || 15,
+        });
+        if (visualResult.frames && visualResult.frames.length > 0) {
+          videoFrames = visualResult.frames;
+        }
+      } catch (vfErr) {
+        console.warn('Visual frame extraction notice:', vfErr);
+      }
+
+      // 3. Determine if video is without speech / silent:
+      const isCompletelySilent = !extracted || extracted.isSilent === true || !extracted.audioBase64;
+
+      if (isCompletelySilent || !extracted) {
+        this.captionExtractionProgress.set('Video has no speech track. Analyzing visual scenes with Gemini Vision...');
+        await this.analyzeVisualContent({
+          videoFrames,
+          durationSeconds: extracted?.duration || project.durationSeconds || 15,
+        });
+        return;
+      }
+
+      // Audio track has sound: send audioBase64 AND visual keyframes.
+      // If the audio turns out to be music-only or lacks speech, the backend automatically performs visual analysis!
+      this.captionExtractionProgress.set('Analyzing speech & syncing subtitle timestamps with Gemini AI...');
+      await this.separateCaptions({
+        audioBase64: extracted.audioBase64,
+        mimeType: extracted.mimeType,
+        videoFrames,
+        durationSeconds: extracted.duration > 0 ? extracted.duration : project.durationSeconds || 45,
+      });
     } catch (err: unknown) {
       console.error('Failed to process video audio for captions:', err);
       const msg = extractApiError(err, 'Failed to extract audio or transcribe video speech.');
@@ -816,6 +824,8 @@ export class ContentCreator {
     durationSeconds?: number;
     audioBase64?: string;
     mimeType?: string;
+    videoFrames?: VideoFrameSample[];
+    forceVisualAnalysis?: boolean;
   }): Promise<void> {
     const project = this.activeCaptionProject();
     if (!project) {
@@ -841,9 +851,17 @@ export class ContentCreator {
         payload['mimeType'] = options.mimeType || 'audio/wav';
       }
 
+      if (options?.videoFrames && options.videoFrames.length > 0) {
+        payload['videoFrames'] = options.videoFrames;
+      }
+
+      if (options?.forceVisualAnalysis) {
+        payload['forceVisualAnalysis'] = true;
+      }
+
       if (options?.rawText) {
         payload['rawText'] = options.rawText;
-      } else if (!options?.audioBase64) {
+      } else if (!options?.audioBase64 && !options?.forceVisualAnalysis) {
         // Look up linked shoot schedule to pass concept & scene scripts
         const schedule = this.schedules().find((s) => s.id === project.linkedScheduleId);
         if (schedule) {
@@ -856,9 +874,14 @@ export class ContentCreator {
         this.http.post<{
           language: string;
           hasSpeech?: boolean;
+          isVideoSilent?: boolean;
+          transcriptionSource?: 'audio_analysis' | 'manual_script' | 'concept_synthesis' | 'speech_fallback' | 'visual_analysis';
+          visualAnalysis?: VisualContentAnalysis;
           fullTranscript: string;
           captions: CaptionSegment[];
           message?: string;
+          notice?: string;
+          isFallback?: boolean;
           error?: string;
         }>('/api/separate-captions', payload)
       );
@@ -868,15 +891,23 @@ export class ContentCreator {
       }
 
       const hasSpeech = response?.hasSpeech !== false && (response?.captions?.length || 0) > 0;
-      const transcriptionSource = options?.audioBase64
-        ? 'audio_analysis'
-        : options?.rawText
-        ? 'manual_script'
-        : 'concept_synthesis';
+      const isVideoSilent = response?.isVideoSilent === true || (!hasSpeech && Boolean(response?.visualAnalysis));
+      const transcriptionSource = response?.transcriptionSource || (
+        isVideoSilent
+          ? 'visual_analysis'
+          : response?.isFallback
+          ? 'speech_fallback'
+          : options?.audioBase64
+          ? 'audio_analysis'
+          : options?.rawText
+          ? 'manual_script'
+          : 'concept_synthesis'
+      );
 
       const analysisNotice =
+        response?.notice ||
         response?.message ||
-        (!hasSpeech && options?.audioBase64
+        (!hasSpeech && !isVideoSilent && options?.audioBase64
           ? 'No spoken words detected in this video track. You can type or paste a script to generate timed captions.'
           : undefined);
 
@@ -887,7 +918,9 @@ export class ContentCreator {
         captions: response?.captions || [],
         status: 'ready',
         hasSpeech,
+        isVideoSilent,
         transcriptionSource,
+        visualAnalysis: response?.visualAnalysis,
         analysisNotice,
       };
 
@@ -898,13 +931,163 @@ export class ContentCreator {
       const message = extractApiError(err, 'Failed to separate captions. Please click Retry.');
       this.errorMessage.set(message);
 
-      const errorProject: VideoCaptionProject = { ...project, status: 'error' };
-      this.activeCaptionProject.set(errorProject);
-      this.updateCaptionProjectInList(errorProject);
+      // Provide emergency captions so the user is never stranded on an unusable screen
+      const existing = project.captions || [];
+      const emergencyCaptions =
+        existing.length > 0
+          ? existing
+          : this.createEmergencyCaptionSegments(project.title, project.durationSeconds);
+
+      const fallbackProject: VideoCaptionProject = {
+        ...project,
+        status: 'ready',
+        captions: emergencyCaptions,
+        fullTranscript: project.fullTranscript || project.title,
+        analysisNotice: `${message} Synchronized starter subtitle segments have been loaded for your video duration so you can edit directly. Click Retry to re-run AI transcription.`,
+        transcriptionSource: 'speech_fallback',
+      };
+      this.activeCaptionProject.set(fallbackProject);
+      this.updateCaptionProjectInList(fallbackProject);
     } finally {
       this.isSeparatingCaptions.set(false);
       this.captionExtractionProgress.set('');
     }
+  }
+
+  /**
+   * Dedicated method for analyzing visual content of silent videos, B-roll, or aesthetic montages.
+   */
+  async analyzeVisualContent(options?: {
+    videoFrames?: VideoFrameSample[];
+    durationSeconds?: number;
+  }): Promise<void> {
+    const project = this.activeCaptionProject();
+    if (!project) return;
+
+    this.isSeparatingCaptions.set(true);
+    this.errorMessage.set(null);
+    this.captionExtractionProgress.set('Analyzing visual scenes, objects & pacing with Gemini Vision...');
+
+    const transcribingProject: VideoCaptionProject = { ...project, status: 'transcribing' };
+    this.activeCaptionProject.set(transcribingProject);
+
+    try {
+      let frames = options?.videoFrames;
+      const targetDuration = options?.durationSeconds || project.durationSeconds || 15;
+
+      if (!frames || frames.length === 0) {
+        const file = this.activeVideoFile();
+        if (file) {
+          const res = await extractVideoKeyframes(file, {
+            maxFrames: 6,
+            maxDimension: 480,
+            targetDuration,
+          });
+          frames = res.frames;
+        } else if (project.videoUrl) {
+          const res = await extractVideoKeyframes(project.videoUrl, {
+            maxFrames: 6,
+            maxDimension: 480,
+            targetDuration,
+          });
+          frames = res.frames;
+        }
+      }
+
+      const response = await firstValueFrom(
+        this.http.post<{
+          language: string;
+          hasSpeech: boolean;
+          isVideoSilent: boolean;
+          transcriptionSource: 'visual_analysis';
+          visualAnalysis: VisualContentAnalysis;
+          fullTranscript: string;
+          captions: CaptionSegment[];
+          notice?: string;
+          error?: string;
+        }>('/api/analyze-visual-content', {
+          videoTitle: project.title,
+          durationSeconds: targetDuration,
+          videoFrames: frames,
+        })
+      );
+
+      if (response?.error) {
+        throw new Error(response.error);
+      }
+
+      const updatedProject: VideoCaptionProject = {
+        ...project,
+        language: response?.language || 'English',
+        fullTranscript: response?.fullTranscript || '',
+        captions: response?.captions || [],
+        status: 'ready',
+        hasSpeech: false,
+        isVideoSilent: true,
+        transcriptionSource: 'visual_analysis',
+        visualAnalysis: response?.visualAnalysis,
+        analysisNotice: response?.notice || 'Video content identified from visual scene analysis.',
+      };
+
+      this.activeCaptionProject.set(updatedProject);
+      this.updateCaptionProjectInList(updatedProject);
+    } catch (err: unknown) {
+      console.error('Failed to analyze visual video content:', err);
+      const message = extractApiError(err, 'Visual analysis failed. Starter captions generated.');
+      this.errorMessage.set(message);
+
+      const emergencyCaptions = this.createEmergencyCaptionSegments(project.title, project.durationSeconds);
+      const fallbackProject: VideoCaptionProject = {
+        ...project,
+        status: 'ready',
+        hasSpeech: false,
+        isVideoSilent: true,
+        transcriptionSource: 'visual_analysis',
+        captions: emergencyCaptions,
+        fullTranscript: project.title,
+        analysisNotice: `${message} Subtitle placeholders have been generated for video duration.`,
+      };
+      this.activeCaptionProject.set(fallbackProject);
+      this.updateCaptionProjectInList(fallbackProject);
+    } finally {
+      this.isSeparatingCaptions.set(false);
+      this.captionExtractionProgress.set('');
+    }
+  }
+
+  createEmergencyCaptionSegments(title?: string, durationSec = 45): CaptionSegment[] {
+    const text = title ? `Video: ${title}` : 'Welcome to this video. Actionable tips and key takeaways.';
+    const words = text.split(/\s+/).filter(Boolean);
+    const wordsPerSegment = 5;
+    const dur = durationSec > 0 ? durationSec : 45;
+    const count = Math.max(3, Math.min(10, Math.ceil(dur / 4)));
+    const segDur = dur / count;
+
+    const formatTime = (sec: number) => {
+      const m = Math.floor(sec / 60);
+      const s = Math.floor(sec % 60);
+      const ms = Math.floor((sec % 1) * 1000);
+      return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(ms).padStart(3, '0')}`;
+    };
+
+    const segments: CaptionSegment[] = [];
+    for (let i = 0; i < count; i++) {
+      const start = i * segDur;
+      const end = Math.min((i + 1) * segDur, dur);
+      const chunk = words.slice(i * wordsPerSegment, (i + 1) * wordsPerSegment).join(' ');
+      const label = chunk || (i === 0 ? 'Hook & introduction' : i === count - 1 ? 'Actionable wrap-up & CTA' : `Key point ${i}`);
+      segments.push({
+        id: `cap-${i + 1}-${Date.now().toString(36)}-${i}`,
+        index: i + 1,
+        startTime: formatTime(start),
+        startSeconds: Number(start.toFixed(2)),
+        endTime: formatTime(end),
+        endSeconds: Number(end.toFixed(2)),
+        text: label,
+        speaker: 'Creator',
+      });
+    }
+    return segments;
   }
 
   updateCaptionSegment(segmentId: string, updates: Partial<CaptionSegment>): void {
@@ -1165,6 +1348,87 @@ export class ContentCreator {
 
     this.activeCaptionProject.set(demoProject);
     const updated = [demoProject, ...this.captionProjects().filter((p) => p.id !== demoProject.id)];
+    this.captionProjects.set(updated);
+    this.persistCaptionProjects(updated);
+  }
+
+  loadDemoSilentVideoProject(): void {
+    const demoSilentProject: VideoCaptionProject = {
+      id: 'demo-silent-broll-1',
+      title: 'Minimalist Desk Setup & Morning Coffee (Silent B-Roll)',
+      fileName: 'aesthetic_desk_broll_silent.mp4',
+      fileSize: 4120000,
+      videoUrl: '',
+      durationSeconds: 18.0,
+      language: 'English',
+      status: 'ready',
+      hasSpeech: false,
+      isVideoSilent: true,
+      transcriptionSource: 'visual_analysis',
+      visualAnalysis: {
+        detectedTopic: 'Morning Creative Routine & Aesthetic Desk Architecture',
+        category: 'Aesthetic B-Roll / Lifestyle',
+        mood: 'Calm, focused, minimalist & cinematic',
+        recommendedMusicVibe: 'Warm acoustic lofi beat with subtle rain textures (65-75 BPM)',
+        visualActions: [
+          'Opening shot: Steam gently rising from freshly brewed pour-over coffee beside a mechanical keyboard',
+          'Cinematic overhead pan across minimalist walnut desk mat, tablet with stylus, and ambient monitor lightbar',
+          'Close-up focus racking: Hands typing smooth code snippets on custom matte keycaps',
+          'Final establishing frame: Sipping warm coffee while looking out morning sunlit window',
+        ],
+        suggestedVoiceover:
+          'This is how I set up my space before writing a single line of code. No phone, natural morning light, and a hot pour-over. When your environment is uncluttered, deep focus follows naturally.',
+      },
+      captions: [
+        {
+          id: 'cap-sb-1',
+          index: 1,
+          startTime: '00:00.000',
+          startSeconds: 0.0,
+          endTime: '00:04.200',
+          endSeconds: 4.2,
+          text: 'Fresh morning pour-over coffee brewing.',
+          speaker: 'Visual Cue',
+        },
+        {
+          id: 'cap-sb-2',
+          index: 2,
+          startTime: '00:04.200',
+          startSeconds: 4.2,
+          endTime: '00:08.500',
+          endSeconds: 8.5,
+          text: 'Minimalist workspace with warm ambient lighting.',
+          speaker: 'Visual Cue',
+        },
+        {
+          id: 'cap-sb-3',
+          index: 3,
+          startTime: '00:08.500',
+          startSeconds: 8.5,
+          endTime: '00:13.200',
+          endSeconds: 13.2,
+          text: 'Mechanical keyboard & deep uninterrupted flow state.',
+          speaker: 'Visual Cue',
+        },
+        {
+          id: 'cap-sb-4',
+          index: 4,
+          startTime: '00:13.200',
+          startSeconds: 13.2,
+          endTime: '00:18.000',
+          endSeconds: 18.0,
+          text: 'Clarity starts with an intentional creative environment.',
+          speaker: 'Visual Cue',
+        },
+      ],
+      fullTranscript:
+        'Fresh morning pour-over coffee brewing. Minimalist workspace with warm ambient lighting. Mechanical keyboard & deep uninterrupted flow state. Clarity starts with an intentional creative environment.',
+      analysisNotice: 'Silent video detected. Visual scenes, actions, and aesthetic subtitles analyzed with Gemini Vision.',
+      createdAt: Date.now(),
+    };
+
+    this.activeCaptionProject.set(demoSilentProject);
+    const updated = [demoSilentProject, ...this.captionProjects().filter((p) => p.id !== demoSilentProject.id)];
     this.captionProjects.set(updated);
     this.persistCaptionProjects(updated);
   }

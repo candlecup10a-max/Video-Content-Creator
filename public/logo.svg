@@ -1,0 +1,134 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <!-- Background subtle radial glow -->
+    <radialGradient id="bgGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#38BDF8" stop-opacity="0.12"/>
+      <stop offset="60%" stop-color="#818CF8" stop-opacity="0.05"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Outer Swirl Arc Gradient: Cyan to Blue to Violet to Magenta to Orange -->
+    <linearGradient id="swirlGrad" x1="15%" y1="15%" x2="85%" y2="85%">
+      <stop offset="0%" stop-color="#00D2FF"/>
+      <stop offset="28%" stop-color="#0284C7"/>
+      <stop offset="55%" stop-color="#6366F1"/>
+      <stop offset="78%" stop-color="#A855F7"/>
+      <stop offset="100%" stop-color="#FF5722"/>
+    </linearGradient>
+
+    <!-- Inner Triangle Play Button Gradient -->
+    <linearGradient id="playGrad" x1="20%" y1="75%" x2="80%" y2="25%">
+      <stop offset="0%" stop-color="#0284C7"/>
+      <stop offset="30%" stop-color="#06B6D4"/>
+      <stop offset="70%" stop-color="#F97316"/>
+      <stop offset="100%" stop-color="#FBBF24"/>
+    </linearGradient>
+
+    <!-- Ring Accent Flare Gradient -->
+    <linearGradient id="flareGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#F97316"/>
+      <stop offset="40%" stop-color="#FB923C"/>
+      <stop offset="100%" stop-color="#FDE047"/>
+    </linearGradient>
+
+    <!-- Flare Radial Glow -->
+    <radialGradient id="starGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#FFFBEB" stop-opacity="1"/>
+      <stop offset="35%" stop-color="#FDE047" stop-opacity="0.9"/>
+      <stop offset="70%" stop-color="#FB923C" stop-opacity="0.4"/>
+      <stop offset="100%" stop-color="#F97316" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Drop Shadow filter -->
+    <filter id="shadowFilter" x="-10%" y="-10%" width="120%" height="120%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="6" stdDeviation="12" flood-color="#0369A1" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+
+  <!-- Ambient Glow -->
+  <circle cx="256" cy="256" r="230" fill="url(#bgGlow)"/>
+
+  <g filter="url(#shadowFilter)">
+    <!-- Swirling Orbital Ring (Top-Left Cyan to Bottom-Right Orange/Purple) -->
+    <!-- Outer primary swirl sweep -->
+    <path d="M 256 70 
+             C 360 70 442 152 442 256 
+             C 442 360 360 442 256 442 
+             C 176 442 108 392 82 320 
+             C 74 298 90 274 114 274 
+             C 128 274 140 284 146 298 
+             C 164 346 206 380 256 380 
+             C 324 380 380 324 380 256 
+             C 380 188 324 132 256 132 
+             C 214 132 178 152 156 184 
+             C 142 204 116 208 96 194 
+             C 78 180 76 152 92 130 
+             C 128 88 188 70 256 70 Z" 
+          fill="url(#swirlGrad)" />
+
+    <!-- Secondary dynamic outer counter-swoosh for dimensional vortex -->
+    <path d="M 210 96 
+             C 275 80 348 98 398 148 
+             C 442 192 458 258 440 318 
+             C 434 338 410 346 392 334 
+             C 378 324 374 304 380 288 
+             C 392 244 380 196 348 164 
+             C 314 130 264 118 218 132 
+             C 198 138 178 126 174 106 
+             C 170 86 188 72 210 96 Z" 
+          fill="url(#flareGrad)" opacity="0.85" />
+
+    <!-- Central Dynamic Play Button (Fluid Triangle) with rounded corners & tail swoop -->
+    <path d="M 175 350 
+             C 162 360 146 344 154 330 
+             L 214 220 
+             C 222 206 240 204 250 216 
+             L 326 298 
+             C 338 312 330 334 312 338 
+             L 190 360 
+             C 178 362 168 356 175 350 Z" 
+          fill="none" />
+
+    <path d="M 188 170 
+             C 198 155 220 155 230 170 
+             L 338 238 
+             C 348 245 348 261 338 268 
+             L 210 354 
+             C 196 364 176 354 176 338 
+             L 176 186 
+             C 176 178 180 172 188 170 Z" 
+          fill="url(#playGrad)" />
+
+    <!-- Play button inner negative space / cutout to give the distinct modern hollow-tail ribbon effect -->
+    <path d="M 216 210 
+             L 292 253 
+             L 216 302 
+             Z" 
+          fill="#ffffff" opacity="0.95"/>
+
+    <!-- Sparkling 4-Point Radiant Flare at top right intersection (~380, 150) -->
+    <!-- Glowing core halo -->
+    <circle cx="384" cy="154" r="26" fill="url(#starGlow)"/>
+
+    <!-- Sharp 4-point star rays -->
+    <path d="M 384 100 
+             Q 384 154 330 154 
+             Q 384 154 384 208 
+             Q 384 154 438 154 
+             Q 384 154 384 100 Z" 
+          fill="#FFFBEB" />
+
+    <!-- Diagonal fine twinkle rays -->
+    <path d="M 384 126 
+             Q 384 154 356 154 
+             Q 384 154 384 182 
+             Q 384 154 412 154 
+             Q 384 154 384 126 Z" 
+          fill="#FDE047" opacity="0.9" transform="rotate(45 384 154)"/>
+
+    <!-- Tiny spark dots -->
+    <circle cx="430" cy="122" r="4.5" fill="#38BDF8"/>
+    <circle cx="442" cy="170" r="3.5" fill="#F97316"/>
+    <circle cx="340" cy="120" r="3" fill="#38BDF8"/>
+  </g>
+</svg>

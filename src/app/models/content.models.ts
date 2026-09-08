@@ -129,6 +129,16 @@ export interface CaptionSegment {
   speaker?: string;
 }
 
+export interface VisualContentAnalysis {
+  detectedTopic: string;
+  category: string;
+  mood: string;
+  recommendedMusicVibe?: string;
+  visualActions: string[];
+  suggestedVoiceover?: string;
+  kineticHook?: string;
+}
+
 export interface VideoCaptionProject {
   id: string;
   title: string;
@@ -141,7 +151,9 @@ export interface VideoCaptionProject {
   fullTranscript: string;
   status: 'idle' | 'transcribing' | 'ready' | 'error';
   hasSpeech?: boolean;
-  transcriptionSource?: 'audio_analysis' | 'manual_script' | 'concept_synthesis';
+  isVideoSilent?: boolean;
+  transcriptionSource?: 'audio_analysis' | 'manual_script' | 'concept_synthesis' | 'speech_fallback' | 'visual_analysis';
+  visualAnalysis?: VisualContentAnalysis;
   analysisNotice?: string;
   linkedScheduleId?: string;
   createdAt: number;

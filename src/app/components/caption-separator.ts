@@ -50,7 +50,7 @@ import {CaptionSegment} from '../models/content.models';
           </p>
         </div>
 
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2 flex-wrap">
           @if (service.activeCaptionProject()) {
             <button
               type="button"
@@ -65,10 +65,21 @@ import {CaptionSegment} from '../models/content.models';
           <button
             type="button"
             (click)="loadDemoVideo()"
-            class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-stone-200 bg-white hover:bg-stone-50 text-stone-700 text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+            class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-stone-200 bg-white hover:bg-stone-50 text-stone-700 text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+            title="Load talking head video with speech captions"
           >
-            <mat-icon class="!w-4 !h-4 !text-[16px] text-amber-500">play_circle</mat-icon>
-            <span>Load Demo Video & Captions</span>
+            <mat-icon class="!w-4 !h-4 !text-[16px] text-indigo-600">play_circle</mat-icon>
+            <span>Demo Speech Video</span>
+          </button>
+
+          <button
+            type="button"
+            (click)="loadDemoSilentVideo()"
+            class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-stone-200 bg-white hover:bg-stone-50 text-stone-700 text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+            title="Load silent B-roll video to see visual scene analysis"
+          >
+            <mat-icon class="!w-4 !h-4 !text-[16px] text-amber-600">visibility</mat-icon>
+            <span>Demo Silent Video (B-Roll)</span>
           </button>
         </div>
       </div>
@@ -93,14 +104,24 @@ import {CaptionSegment} from '../models/content.models';
 
       <!-- Speech Analysis Notice / Warning -->
       @if (service.activeCaptionProject()?.analysisNotice; as notice) {
-        <div class="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-start gap-2.5">
-          <mat-icon class="!w-4 !h-4 !text-[16px] text-amber-600 shrink-0 mt-0.5">info</mat-icon>
-          <div class="space-y-1">
-            <span class="font-semibold">{{ notice }}</span>
-            <p class="text-amber-800 text-[11px]">
-              If your video has faint voice or background music, you can also generate synchronized captions by clicking <strong>"From Script"</strong>.
-            </p>
+        <div class="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-start justify-between gap-3 animate-fade-in shadow-xs">
+          <div class="flex items-start gap-2.5">
+            <mat-icon class="!w-4 !h-4 !text-[16px] text-amber-600 shrink-0 mt-0.5">info</mat-icon>
+            <div class="space-y-1">
+              <span class="font-semibold">{{ notice }}</span>
+              <p class="text-amber-800 text-[11px]">
+                You can directly play the video, edit timestamps, or update subtitle words below.
+              </p>
+            </div>
           </div>
+          <button
+            type="button"
+            (click)="onRetryCaptionSeparation()"
+            [disabled]="service.isSeparatingCaptions()"
+            class="px-2.5 py-1 rounded-lg bg-amber-600 text-white text-[11px] font-semibold hover:bg-amber-700 cursor-pointer shrink-0 disabled:opacity-50"
+          >
+            Retry AI
+          </button>
         </div>
       }
 
@@ -114,18 +135,28 @@ import {CaptionSegment} from '../models/content.models';
 
       <!-- Error / Notice Banner -->
       @if (service.errorMessage()) {
-        <div class="p-4 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-center justify-between gap-3">
+        <div class="p-4 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-center justify-between gap-3 animate-fade-in">
           <div class="flex items-center gap-2">
             <mat-icon class="text-rose-600">error_outline</mat-icon>
             <span>{{ service.errorMessage() }}</span>
           </div>
-          <button
-            type="button"
-            (click)="onRetryCaptionSeparation()"
-            class="px-3 py-1 rounded-lg bg-rose-600 text-white font-semibold hover:bg-rose-700 cursor-pointer shrink-0"
-          >
-            Retry
-          </button>
+          <div class="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              (click)="onRetryCaptionSeparation()"
+              class="px-3 py-1 rounded-lg bg-rose-600 text-white font-semibold hover:bg-rose-700 cursor-pointer text-xs"
+            >
+              Retry
+            </button>
+            <button
+              type="button"
+              (click)="service.errorMessage.set(null)"
+              class="p-1 text-rose-500 hover:text-rose-800 rounded cursor-pointer"
+              title="Dismiss"
+            >
+              <mat-icon class="!w-4 !h-4 !text-[16px]">close</mat-icon>
+            </button>
+          </div>
         </div>
       }
 
@@ -171,7 +202,16 @@ import {CaptionSegment} from '../models/content.models';
               class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-semibold cursor-pointer transition-colors"
             >
               <mat-icon class="!w-4 !h-4 !text-[16px] text-indigo-600">movie</mat-icon>
-              <span>Explore With Demo Video</span>
+              <span>Explore Demo Speech Video</span>
+            </button>
+
+            <button
+              type="button"
+              (click)="loadDemoSilentVideo()"
+              class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-xs font-semibold cursor-pointer transition-colors"
+            >
+              <mat-icon class="!w-4 !h-4 !text-[16px] text-amber-600">visibility</mat-icon>
+              <span>Explore Silent Video (B-Roll)</span>
             </button>
           </div>
 
@@ -204,6 +244,11 @@ import {CaptionSegment} from '../models/content.models';
                       <mat-icon class="!w-3 !h-3 !text-[12px]">mic</mat-icon>
                       <span>Speech Audio Analyzed</span>
                     </span>
+                  } @else if (service.activeCaptionProject()?.transcriptionSource === 'visual_analysis') {
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 inline-flex items-center gap-1">
+                      <mat-icon class="!w-3 !h-3 !text-[12px]">visibility</mat-icon>
+                      <span>Silent Video • Visual Content Analyzed</span>
+                    </span>
                   } @else if (service.activeCaptionProject()?.transcriptionSource === 'manual_script') {
                     <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 inline-flex items-center gap-1">
                       <mat-icon class="!w-3 !h-3 !text-[12px]">article</mat-icon>
@@ -229,6 +274,7 @@ import {CaptionSegment} from '../models/content.models';
                 [disabled]="service.isSeparatingCaptions()"
                 (click)="onTriggerCaptionSeparation()"
                 class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                title="Transcribe speech track with Gemini"
               >
                 @if (service.isSeparatingCaptions()) {
                   <mat-icon class="!w-3.5 !h-3.5 !text-[14px] animate-spin">refresh</mat-icon>
@@ -237,6 +283,17 @@ import {CaptionSegment} from '../models/content.models';
                   <mat-icon class="!w-3.5 !h-3.5 !text-[14px]">auto_awesome</mat-icon>
                   <span>Analyze Speech & Separate</span>
                 }
+              </button>
+
+              <button
+                type="button"
+                [disabled]="service.isSeparatingCaptions()"
+                (click)="onTriggerVisualAnalysis()"
+                class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-stone-200 bg-white hover:bg-stone-50 text-stone-700 text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+                title="Analyze silent videos, B-roll, and visual actions with Gemini Vision"
+              >
+                <mat-icon class="!w-3.5 !h-3.5 !text-[14px] text-amber-600">visibility</mat-icon>
+                <span>Analyze Visuals (Silent/B-Roll)</span>
               </button>
 
               <button
@@ -472,6 +529,112 @@ import {CaptionSegment} from '../models/content.models';
 
             <!-- Right: Separated Captions Timeline (7 cols on lg) -->
             <div class="lg:col-span-7 space-y-4">
+              <!-- Visual Scene & Content Intelligence (For Silent Videos / B-Roll) -->
+              @if (service.activeCaptionProject()?.visualAnalysis; as visual) {
+                <div class="bg-white rounded-2xl border border-amber-200/90 p-4 sm:p-5 space-y-3.5 shadow-xs animate-fade-in relative overflow-hidden">
+                  <div class="absolute top-0 right-0 w-32 h-32 bg-amber-100/40 rounded-full blur-2xl pointer-events-none"></div>
+
+                  <div class="flex items-start justify-between gap-3 flex-wrap relative">
+                    <div class="flex items-center gap-2.5">
+                      <div class="w-8 h-8 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0">
+                        <mat-icon class="!w-4 !h-4 !text-[18px]">visibility</mat-icon>
+                      </div>
+                      <div>
+                        <div class="flex items-center gap-2">
+                          <h4 class="text-xs font-bold text-stone-900 uppercase tracking-wider">Visual Content Intelligence</h4>
+                          <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300/60">
+                            Silent Video Detected
+                          </span>
+                        </div>
+                        <p class="text-[11px] text-stone-500">Extracted scene keyframes & analyzed with Gemini Vision</p>
+                      </div>
+                    </div>
+
+                    <div class="flex items-center gap-1.5">
+                      <span class="px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-stone-100 text-stone-700">
+                        {{ visual.category }}
+                      </span>
+                      <span class="px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-stone-100 text-stone-700">
+                        {{ visual.mood }}
+                      </span>
+                    </div>
+                  </div>
+
+                  <!-- Topic & Music Vibe Cards -->
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-1">
+                    <div class="p-3 rounded-xl bg-stone-50 border border-stone-200/80 space-y-1">
+                      <span class="text-[10px] font-bold text-stone-400 uppercase tracking-wider flex items-center gap-1">
+                        <mat-icon class="!w-3 !h-3 !text-[12px] text-amber-600">movie_filter</mat-icon>
+                        <span>Identified Video Topic</span>
+                      </span>
+                      <p class="text-xs font-bold text-stone-900 leading-snug">
+                        {{ visual.detectedTopic }}
+                      </p>
+                    </div>
+
+                    <div class="p-3 rounded-xl bg-stone-50 border border-stone-200/80 space-y-1">
+                      <span class="text-[10px] font-bold text-stone-400 uppercase tracking-wider flex items-center gap-1">
+                        <mat-icon class="!w-3 !h-3 !text-[12px] text-indigo-600">music_note</mat-icon>
+                        <span>Suggested Audio / Music Vibe</span>
+                      </span>
+                      <p class="text-xs font-medium text-stone-800 leading-snug">
+                        {{ visual.recommendedMusicVibe }}
+                      </p>
+                    </div>
+                  </div>
+
+                  <!-- Observed Visual Actions -->
+                  @if (visual.visualActions.length) {
+                    <div class="space-y-1.5 pt-1">
+                      <span class="text-[10px] font-bold text-stone-400 uppercase tracking-wider flex items-center gap-1">
+                        <mat-icon class="!w-3 !h-3 !text-[12px] text-stone-500">view_timeline</mat-icon>
+                        <span>Visual Scene Progression</span>
+                      </span>
+                      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        @for (action of visual.visualActions; track action) {
+                          <div class="flex items-start gap-2 p-2 rounded-lg bg-stone-50 border border-stone-200/70 text-[11px] text-stone-700">
+                            <mat-icon class="!w-3.5 !h-3.5 !text-[14px] text-amber-600 shrink-0 mt-0.5">check_circle</mat-icon>
+                            <span class="leading-tight">{{ action }}</span>
+                          </div>
+                        }
+                      </div>
+                    </div>
+                  }
+
+                  <!-- Optional Voiceover Script for Silent Video -->
+                  @if (visual.suggestedVoiceover) {
+                    <div class="p-3 rounded-xl bg-indigo-50/70 border border-indigo-200/70 space-y-2">
+                      <div class="flex items-center justify-between gap-2 flex-wrap">
+                        <span class="text-[11px] font-bold text-indigo-950 flex items-center gap-1">
+                          <mat-icon class="!w-3.5 !h-3.5 !text-[14px] text-indigo-600">record_voice_over</mat-icon>
+                          <span>Suggested Voiceover Script (For TikTok / Reels / Shorts)</span>
+                        </span>
+                        <div class="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            (click)="copyVoiceover(visual.suggestedVoiceover)"
+                            class="px-2 py-0.5 rounded-md bg-white border border-indigo-200 text-indigo-800 hover:bg-indigo-50 text-[10px] font-semibold cursor-pointer"
+                          >
+                            {{ copiedVoiceover() ? 'Copied!' : 'Copy Script' }}
+                          </button>
+                          <button
+                            type="button"
+                            (click)="applyVoiceoverAsScript(visual.suggestedVoiceover)"
+                            class="px-2 py-0.5 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 text-[10px] font-semibold cursor-pointer"
+                            title="Split this voiceover into timed subtitles for this video"
+                          >
+                            Time as Subtitles
+                          </button>
+                        </div>
+                      </div>
+                      <p class="text-xs text-indigo-900 leading-relaxed italic">
+                        "{{ visual.suggestedVoiceover }}"
+                      </p>
+                    </div>
+                  }
+                </div>
+              }
+
               <!-- Caption Timeline Bar -->
               <div class="bg-white rounded-2xl border border-stone-200 p-4 flex items-center justify-between gap-3 shadow-xs">
                 <div class="flex items-center gap-2">
@@ -533,16 +696,26 @@ import {CaptionSegment} from '../models/content.models';
                   <div class="p-10 text-center bg-white rounded-2xl border border-dashed border-stone-300 space-y-3">
                     <mat-icon class="!w-8 !h-8 !text-[32px] text-stone-300 mx-auto">subtitles_off</mat-icon>
                     <p class="text-xs text-stone-500 max-w-sm mx-auto">
-                      No captions separated yet. Click "Analyze Speech & Separate" to transcribe the real spoken audio, or paste your script.
+                      No captions separated yet. Click "Analyze Speech & Separate" to transcribe the real spoken audio, or "Analyze Visuals" for silent footage.
                     </p>
                     <div class="flex items-center justify-center gap-2 pt-1 flex-wrap">
                       <button
                         type="button"
+                        [disabled]="service.isSeparatingCaptions()"
                         (click)="onTriggerCaptionSeparation()"
-                        class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold cursor-pointer shadow-xs"
+                        class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold cursor-pointer shadow-xs"
                       >
                         <mat-icon class="!w-4 !h-4 !text-[16px]">auto_awesome</mat-icon>
-                        <span>Analyze Speech & Separate</span>
+                        <span>Analyze Speech Track</span>
+                      </button>
+                      <button
+                        type="button"
+                        [disabled]="service.isSeparatingCaptions()"
+                        (click)="onTriggerVisualAnalysis()"
+                        class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-amber-300 bg-amber-50 hover:bg-amber-100 disabled:opacity-50 text-amber-900 text-xs font-semibold cursor-pointer shadow-2xs"
+                      >
+                        <mat-icon class="!w-4 !h-4 !text-[16px] text-amber-600">visibility</mat-icon>
+                        <span>Analyze Visuals (Silent/B-Roll)</span>
                       </button>
                       <button
                         type="button"
@@ -682,6 +855,7 @@ export class CaptionSeparator {
   readonly showScriptInput = signal<boolean>(false);
   readonly customScriptText = signal<string>('');
   readonly copiedTranscript = signal<boolean>(false);
+  readonly copiedVoiceover = signal<boolean>(false);
   readonly videoPlaybackError = signal<boolean>(false);
   readonly uploadStatusMessage = signal<string | null>(null);
 
@@ -877,6 +1051,26 @@ export class CaptionSeparator {
 
   onRetryCaptionSeparation(): void {
     this.service.separateCaptionsForFile();
+  }
+
+  loadDemoSilentVideo(): void {
+    this.service.loadDemoSilentVideoProject();
+  }
+
+  onTriggerVisualAnalysis(): void {
+    this.service.analyzeVisualContent();
+  }
+
+  copyVoiceover(text: string): void {
+    navigator.clipboard.writeText(text);
+    this.copiedVoiceover.set(true);
+    setTimeout(() => this.copiedVoiceover.set(false), 2000);
+  }
+
+  applyVoiceoverAsScript(text: string): void {
+    this.customScriptText.set(text);
+    this.showScriptInput.set(true);
+    this.onSeparateFromScript();
   }
 
   copyTranscript(text: string): void {
