@@ -1,0 +1,33 @@
+<div class="min-h-screen flex flex-col bg-stone-50 text-stone-900 selection:bg-amber-200 selection:text-stone-900">
+  <app-header />
+
+  <main class="flex-1 pb-16">
+    @switch (service.activeTab()) {
+      @case ('ideation') {
+        <app-idea-generator />
+      }
+      @case ('schedule') {
+        <app-shoot-schedule />
+      }
+      @case ('captions') {
+        <app-caption-separator />
+      }
+      @case ('package') {
+        <app-social-distributor />
+      }
+      @case ('saved') {
+        <app-saved-library />
+      }
+    }
+  </main>
+
+  <footer class="border-t border-stone-200 py-6 bg-white text-center text-xs text-stone-500">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-3">
+      <div class="flex items-center gap-2 font-medium text-stone-700">
+        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+        <span>Video Content Creator Studio</span>
+      </div>
+      <p>Ideate video concepts, craft hooks & publish across LinkedIn, Facebook, TikTok, and Twitter / X</p>
+    </div>
+  </footer>
+</div>

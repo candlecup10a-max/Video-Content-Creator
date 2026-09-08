@@ -1,0 +1,6 @@
+{
+  "name": "Video Content Creator",
+  "description": "Generate creative video ideas, plan video taking schedules, upload recorded videos to separate captions, and generate multi-platform social media posts for TikTok, LinkedIn, Twitter, and Facebook.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
